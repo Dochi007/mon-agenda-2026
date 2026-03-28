@@ -43,6 +43,9 @@ with st.expander("➕ Ajouter un évènement"):
     if st.button("Enregistrer", use_container_width=True):
         if d_input not in st.session_state.activites: st.session_state.activites[d_input] = []
         st.session_state.activites[d_input].append({"texte": f"{o_input} - {t_input}", "couleur": ORGANISATEURS[o_input]})
+        # Effacer l'image en cache si on ajoute un nouvel événement
+        if 'image_export' in st.session_state:
+            del st.session_state['image_export']
         st.rerun()
 
 st.divider()
@@ -97,8 +100,19 @@ def generer_image_hd(mois, activites):
 st.divider()
 
 # --- BOUTON EXPORT ---
-if st.button("🖼️ GÉNÉRER L'IMAGE JPEG HD", use_container_width=True):
+if st.button("🖼️ PRÉPARER L'IMAGE JPEG HD", use_container_width=True):
     with st.spinner("Dessin de l'image en cours..."):
         img_finale = generer_image_hd(mois_sel, st.session_state.activites)
         buf = io.BytesIO()
         img_finale.save(buf, format="JPEG", quality=95)
+        st.session_state['image_export'] = buf.getvalue()
+
+if 'image_export' in st.session_state:
+    st.image(st.session_state['image_export'], caption="Aperçu du fichier final")
+    st.download_button(
+        label="📥 CLIQUER ICI POUR TÉLÉCHARGER",
+        data=st.session_state['image_export'],
+        file_name=f"Programmation_EEF_{mois_sel}_2026.jpg",
+        mime="image/jpeg",
+        use_container_width=True
+    )
