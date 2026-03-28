@@ -1,22 +1,20 @@
 import streamlit as st
+from streamlit_calendar import calendar
 from PIL import Image, ImageDraw, ImageFont
-import os, json, io
+import io
 
-st.set_page_config(page_title="Programmation EEF", layout="centered")
+st.set_page_config(page_title="Programmation EEF", layout="wide")
 
-# --- CSS MATERIAL DESIGN ---
-st.markdown("""
-    <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    .day-header { font-family: 'Roboto', sans-serif; font-size: 14px; color: #70757a; margin-top: 15px; margin-bottom: 5px; font-weight: 500; text-transform: uppercase; }
-    .day-number { font-size: 24px; color: #3c4043; margin-right: 15px; }
-    </style>
-""", unsafe_allow_html=True)
-
+# --- DONNÉES ---
 ORGANISATEURS = {
-    "EEF": (52, 168, 83, 255), "JFC": (161, 66, 244, 255),
-    "JE":  (217, 48, 37, 255), "DC":  (249, 171, 0, 255)
+    "EEF": {"rgb": (52, 168, 83, 255), "hex": "#34a853"},
+    "JFC": {"rgb": (161, 66, 244, 255), "hex": "#a142f4"},
+    "JE":  {"rgb": (217, 48, 37, 255), "hex": "#d93025"},
+    "DC":  {"rgb": (249, 171, 0, 255), "hex": "#f9ab00"}
 }
+
+MOIS_NUM = {"Janvier": "01", "Février": "02", "Mars": "03", "Avril": "04", "Mai": "05", "Juin": "06", 
+            "Juillet": "07", "Août": "08", "Septembre": "09", "Octobre": "10", "Novembre": "11", "Décembre": "12"}
 
 CONFIG_2026 = {
     "Janvier": {"decalage": 4, "jours": 31}, "Février": {"decalage": 0, "jours": 28},
@@ -31,31 +29,46 @@ if 'activites' not in st.session_state:
     st.session_state.activites = {}
 
 st.title("Programmation EEF")
-mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3, label_visibility="collapsed")
+mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
+m_num = MOIS_NUM[mois_sel]
 
 # --- AJOUT RAPIDE ---
-with st.expander("➕ Ajouter un évènement"):
-    c1, c2 = st.columns(2)
+with st.expander("➕ Ajouter un évènement", expanded=True):
+    c1, c2, c3 = st.columns([1, 2, 3])
     d_input = c1.number_input("Jour", 1, params["jours"])
     o_input = c2.selectbox("Organisateur", list(ORGANISATEURS.keys()))
-    t_input = st.text_input("Titre")
+    t_input = c3.text_input("Titre")
     if st.button("Enregistrer", use_container_width=True):
         if d_input not in st.session_state.activites: st.session_state.activites[d_input] = []
-        st.session_state.activites[d_input].append({"texte": f"{o_input} - {t_input}", "couleur": ORGANISATEURS[o_input]})
-        if 'image_export' in st.session_state:
-            del st.session_state['image_export']
+        st.session_state.activites[d_input].append({"texte": f"{o_input} - {t_input}", "couleur": ORGANISATEURS[o_input]["rgb"]})
+        if 'image_export' in st.session_state: del st.session_state['image_export']
         st.rerun()
 
-st.divider()
+# --- CALENDRIER INTERACTIF (Type Google) ---
+calendar_events = []
+for jour, evs in st.session_state.activites.items():
+    jour_str = f"{jour:02d}"
+    for ev in evs:
+        hex_col = "#1a73e8"
+        for k, v in ORGANISATEURS.items():
+            if v["rgb"] == ev["couleur"]: hex_col = v["hex"]
+            
+        calendar_events.append({
+            "title": ev["texte"],
+            "start": f"2026-{m_num}-{jour_str}",
+            "color": hex_col
+        })
 
-# --- VUE MOBILE ---
-for j in range(1, params["jours"] + 1):
-    if j in st.session_state.activites:
-        st.markdown(f'<div class="day-header"><span class="day-number">{j}</span> {mois_sel[:3].upper()}</div>', unsafe_allow_html=True)
-        for ev in st.session_state.activites[j]:
-            c = ev['couleur']
-            st.markdown(f'<div style="background-color:rgb({c[0]},{c[1]},{c[2]}); color:white; padding:12px 15px; border-radius:8px; margin-bottom:8px; font-family:sans-serif; font-size:14px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">{ev["texte"]}</div>', unsafe_allow_html=True)
+calendar_options = {
+    "initialView": "dayGridMonth",
+    "initialDate": f"2026-{m_num}-01",
+    "locale": "fr",
+    "headerToolbar": {"left": "", "center": "title", "right": ""},
+    "height": 600
+}
+
+calendar(events=calendar_events, options=calendar_options)
 
 # --- MOTEUR DE DESSIN PIL ---
 def generer_image_hd(mois, activites):
@@ -95,13 +108,12 @@ def generer_image_hd(mois, activites):
                     d.text((x + col_w//2, y_off + ch//2), ev["texte"], fill="white", font=f_ev, anchor="mm")
                     y_off += ch + 4
 
-    # --- PIED DE PAGE (LÉGENDE) ---
     x_leg = grid_x + (total_w - (len(ORGANISATEURS) * 220)) // 2 + 60
-    y_leg = grid_y + (6 * row_h) + 20 # 20px de marge au lieu de 50px pour être plus près
+    y_leg = grid_y + (6 * row_h) + 20
     
-    for i, (nom, coul) in enumerate(ORGANISATEURS.items()):
+    for i, (nom, conf) in enumerate(ORGANISATEURS.items()):
         x_p = x_leg + (i * 220)
-        d.rectangle([x_p, y_leg, x_p+30, y_leg+30], fill=coul)
+        d.rectangle([x_p, y_leg, x_p+30, y_leg+30], fill=conf["rgb"])
         d.text((x_p + 40, y_leg + 2), nom, fill=(50,50,50,255), font=f_leg)
 
     return Image.alpha_composite(base, txt_layer).convert("RGB")
