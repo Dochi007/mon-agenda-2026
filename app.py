@@ -85,37 +85,42 @@ calendar_options = {
     "selectable": True
 }
 
-# Affichage du calendrier avec détection explicite des clics
 cal_result = calendar(events=calendar_events, options=calendar_options, callbacks=['dateClick', 'eventClick'])
 
-# --- DÉTECTION DES CLICS CORRIGÉE ---
+# --- DÉTECTION DES CLICS ULTRA-SÉCURISÉE ---
 if cal_result and "callback" in cal_result:
-    callback_type = cal_result["callback"]
+    callback_type = cal_result.get("callback")
     
-    # 1. Clic sur une case vide
-    if callback_type == "dateClick":
-        # On utilise le timeStamp unique pour ne pas rouvrir la fenêtre au hasard
-        click_id = str(cal_result["dateClick"].get("jsEvent", {}).get("timeStamp", cal_result["dateClick"]["dateStr"]))
+    # Signature unique brute pour éviter les ouvertures en boucle
+    action_sig = str(cal_result)
+    
+    if st.session_state.last_action != action_sig:
+        st.session_state.last_action = action_sig
         
-        if st.session_state.last_action != click_id:
-            st.session_state.last_action = click_id
-            jour_clique = int(cal_result["dateClick"]["dateStr"].split("-")[2])
-            dialog_ajout(jour_clique, mois_sel)
+        # 1. Clic sur une date vide
+        if callback_type == "dateClick":
+            click_data = cal_result.get("dateClick", {})
+            date_str = click_data.get("dateStr") or click_data.get("date", "")
             
-    # 2. Clic sur un évènement existant
-    elif callback_type == "eventClick":
-        event_title = cal_result["eventClick"]["event"]["title"]
-        click_id = str(cal_result["eventClick"].get("jsEvent", {}).get("timeStamp", event_title))
-        
-        if st.session_state.last_action != click_id:
-            st.session_state.last_action = click_id
-            event_start = cal_result["eventClick"]["event"]["start"]
-            jour_clique = int(event_start.split("T")[0].split("-")[2])
+            if date_str:
+                # Récupère le jour en toute sécurité
+                jour_clique = int(date_str.split("T")[0].split("-")[2])
+                dialog_ajout(jour_clique, mois_sel)
+                
+        # 2. Clic sur un événement
+        elif callback_type == "eventClick":
+            event_data = cal_result.get("eventClick", {}).get("event", {})
+            event_title = event_data.get("title", "")
+            event_start = event_data.get("start", "")
             
-            for idx, ev in enumerate(st.session_state.activites.get(jour_clique, [])):
-                if ev["texte"] == event_title:
-                    dialog_supprimer(jour_clique, idx, event_title)
-                    break
+            if event_title and event_start:
+                jour_clique = int(event_start.split("T")[0].split("-")[2])
+                
+                # Cherche l'index exact pour la suppression
+                for idx, ev in enumerate(st.session_state.activites.get(jour_clique, [])):
+                    if ev["texte"] == event_title:
+                        dialog_supprimer(jour_clique, idx, event_title)
+                        break
 
 # --- MOTEUR DE DESSIN PIL ---
 def generer_image_hd(mois, activites):
