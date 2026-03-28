@@ -1,16 +1,27 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-import os
-import json
-import io
+import os, json, io
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION PAGE WEB ---
 st.set_page_config(page_title="Agenda Pro 2026", layout="wide")
 
+# --- STYLE CSS (Pour recréer les cases Google) ---
+st.markdown("""
+    <style>
+    .stButton > button {
+        height: 100px; width: 100%; border-radius: 0; border: 0.5px solid #e0e0e0;
+        background-color: white; color: #70757a; align-items: flex-start;
+    }
+    .event-pill {
+        color: white; padding: 2px 5px; border-radius: 4px; font-size: 10px; margin-bottom: 2px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 ORGANISATEURS = {
-    "EEF": (52, 168, 83, 178), "JFC": (161, 66, 244, 178),
-    "JE":  (217, 48, 37, 178), "DC":  (249, 171, 0, 178),
-    "Std": (26, 115, 232, 178)
+    "EEF": (52, 168, 83, 255), "JFC": (161, 66, 244, 255),
+    "JE":  (217, 48, 37, 255), "DC":  (249, 171, 0, 255),
+    "Std": (26, 115, 232, 255)
 }
 
 CONFIG_2026 = {
@@ -22,74 +33,58 @@ CONFIG_2026 = {
     "Novembre": {"decalage": 0, "jours": 30}, "Décembre": {"decalage": 2, "jours": 31}
 }
 
-# --- GESTION DES DONNÉES (Session State) ---
-if 'activites' not in st.session_state:
-    st.session_state.activites = {}
+if 'activites' not in st.session_state: st.session_state.activites = {}
 
-# --- INTERFACE LATÉRALE (SAISIE) ---
-st.sidebar.title("🛠 Configuration")
-mois_sel = st.sidebar.selectbox("Choisir le mois", list(CONFIG_2026.keys()))
+# --- HEADER ---
+st.title("📅 Agenda Pro 2026")
+mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
 
-with st.sidebar.expander("➕ Ajouter un évènement", expanded=True):
-    jour = st.number_input("Jour", min_value=1, max_value=params["jours"], value=1)
-    org = st.selectbox("Organisateur", list(ORGANISATEURS.keys()))
-    texte = st.text_input("Description")
-    if st.button("Ajouter à l'agenda"):
-        if jour not in st.session_state.activites:
-            st.session_state.activites[jour] = []
-        st.session_state.activites[jour].append({"texte": f"{org} - {texte}", "couleur": ORGANISATEURS[org]})
-        st.toast("Évènement ajouté !")
-
-if st.sidebar.button("🗑 Effacer tout le mois"):
-    st.session_state.activites = {}
-    st.rerun()
-
-# --- AFFICHAGE DU CALENDRIER (STYLE GOOGLE) ---
-st.title(f"📅 {mois_sel.upper()} 2026")
-
-# Création de la grille web
+# --- GRILLE ---
 cols = st.columns(7)
-jours_semaine = ["DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM"]
-
-for i, nom_j in enumerate(jours_semaine):
-    cols[i].markdown(f"**{nom_j}**")
+for i, d in enumerate(["DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM"]):
+    cols[i].write(f"**{d}**")
 
 decalage = params["decalage"]
 for i in range(42):
-    col_idx = i % 7
+    c_idx = i % 7
     jour_num = i - decalage + 1
-    
-    with cols[col_idx]:
+    with cols[c_idx]:
         if 1 <= jour_num <= params["jours"]:
-            # Style de la case
-            st.markdown(f"### {jour_num}")
+            if st.button(f"{jour_num}", key=f"btn_{i}"):
+                st.session_state.selected_day = jour_num
+            
             if jour_num in st.session_state.activites:
-                for idx, ev in enumerate(st.session_state.activites[jour_num]):
+                for ev in st.session_state.activites[jour_num]:
                     c = ev['couleur']
-                    st.markdown(f"""
-                        <div style="background-color: rgba({c[0]},{c[1]},{c[2]},0.7); 
-                        color: white; padding: 2px 5px; border-radius: 4px; font-size: 12px; margin-bottom: 2px;">
-                        {ev['texte']}
-                        </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.write("")
+                    st.markdown(f'<div class="event-pill" style="background-color:rgb({c[0]},{c[1]},{c[2]});">{ev["texte"]}</div>', unsafe_allow_html=True)
 
-# --- GÉNÉRATION DE L'IMAGE ---
-st.divider()
-if st.button("🚀 GÉNÉRER L'IMAGE HD (JPEG)", use_container_width=True):
-    # (Ici on place ta logique PIL de dessin, identique à avant)
-    # Pour l'exemple, voici la sauvegarde dans un buffer pour téléchargement
-    img_fond = Image.open("test.png").convert("RGBA").resize((1800, 1400))
-    # ... [Ton code de dessin draw_c / draw_f ici] ...
+# --- FORMULAIRE D'AJOUT ---
+if 'selected_day' in st.session_state:
+    st.sidebar.subheader(f"Ajouter au {st.session_state.selected_day} {mois_sel}")
+    org = st.sidebar.selectbox("Organisateur", list(ORGANISATEURS.keys()))
+    txt = st.sidebar.text_input("Evènement")
+    if st.sidebar.button("Enregistrer"):
+        d = st.session_state.selected_day
+        if d not in st.session_state.activites: st.session_state.activites[d] = []
+        st.session_state.activites[d].append({"texte": f"{org} - {txt}", "couleur": ORGANISATEURS[org]})
+        del st.session_state.selected_day
+        st.rerun()
+
+# --- EXPORT IMAGE ---
+if st.button("🖼️ GÉNÉRER L'IMAGE FINALE (JPEG)", use_container_width=True):
+    # Logique de dessin PIL identique à ton code
+    img = Image.open("test.png").convert("RGBA").resize((1800, 1400))
+    calque = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(calque)
+    f_titre = ImageFont.truetype("Heavitas.ttf", 75)
     
-    # Export final
+    # Dessin du titre et de la grille (simplifié pour l'exemple)
+    draw.text((900, 180), f"{mois_sel.upper()} 2026", fill=(0,0,0,255), font=f_titre, anchor="mm")
+    
+    # Fusion et téléchargement
+    final = Image.alpha_composite(img, calque).convert("RGB")
     buf = io.BytesIO()
-    img_fond.convert("RGB").save(buf, format="JPEG")
-    st.download_button(
-        label="📥 Télécharger l'image prête",
-        data=buf.getvalue(),
-        file_name=f"Agenda_{mois_sel}_2026.jpg",
-        mime="image/jpeg"
-    )
+    final.save(buf, format="JPEG")
+    st.image(final)
+    st.download_button("📥 Télécharger l'image", buf.getvalue(), f"Agenda_{mois_sel}.jpg", "image/jpeg")
