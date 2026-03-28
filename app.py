@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 from streamlit_calendar import calendar
 from PIL import Image, ImageDraw, ImageFont
 import io
@@ -6,7 +6,6 @@ import calendar as cal_sys
 
 st.set_page_config(page_title="Programmation EEF", layout="wide")
 
-# --- FONCTION DE CHARGEMENT DES POLICES (SANS ERREUR D'ESPACE) ---
 def charger_police(nom_fichier, taille):
     chemins = [
         nom_fichier,
@@ -21,7 +20,6 @@ def charger_police(nom_fichier, taille):
             continue
     return ImageFont.load_default()
 
-# --- ORGANISATEURS ---
 ORGANISATEURS = {
     "EEF":   {"rgb": (52, 168, 83, 178), "hex": "#34a853"},
     "JFC":   {"rgb": (161, 66, 244, 178), "hex": "#a142f4"},
@@ -43,7 +41,6 @@ CONFIG_2026 = {
     "Novembre": {"decalage": 0, "jours": 30}, "Décembre": {"decalage": 2, "jours": 31}
 }
 
-# --- GÉNÉRATEUR D'ÉVÈNEMENTS RÉCURRENTS ---
 def generer_tous_les_recurrents():
     tous_les_mois = {}
     for mois_nom, mois_num_str in MOIS_NUM.items():
@@ -75,13 +72,11 @@ def generer_tous_les_recurrents():
         tous_les_mois[mois_nom] = recurrents_du_mois
     return tous_les_mois
 
-# --- INITIALISATION MÉMOIRE ---
 if 'initialise' not in st.session_state:
     st.session_state.activites = generer_tous_les_recurrents()
     st.session_state.initialise = True
     st.session_state.last_action = None
 
-# --- FENÊTRES MODALES ---
 @st.dialog("➕ Nouvel évènement")
 def dialog_ajout(jour, mois):
     st.write(f"**Date :** {jour} {mois} 2026")
@@ -104,7 +99,6 @@ def dialog_supprimer(jour, mois, index_event, texte):
         if 'image_export' in st.session_state: del st.session_state['image_export']
         st.rerun()
 
-# --- INTERFACE PRINCIPALE ---
 st.title("Programmation EEF")
 mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
@@ -112,7 +106,6 @@ m_num = MOIS_NUM[mois_sel]
 
 st.info("💡 Cliquez directement sur une case du calendrier pour ajouter un évènement, ou sur un évènement pour le supprimer.")
 
-# --- CALENDRIER ---
 calendar_events = []
 for jour, evs in st.session_state.activites[mois_sel].items():
     jour_str = f"{jour:02d}"
@@ -163,7 +156,6 @@ if cal_result and "callback" in cal_result:
                         dialog_supprimer(jour_clique, mois_sel, idx, event_title)
                         break
 
-# --- FONCTIONS DE DESSIN PIL ---
 def largeur_texte(texte, font, draw):
     try:
         return draw.textlength(texte, font=font)
@@ -186,11 +178,9 @@ def generer_image_hd(mois, activites_du_mois):
     txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(txt_layer)
     
-    # Utilisation de la nouvelle fonction pour charger les polices avec accents
     f_titre = charger_police("Heavitas.ttf", 75)
     f_num = charger_police("Arial.ttf", 30)
     f_ev = charger_police("Arial.ttf", 18)
-    f_leg = charger_police("Arial.ttf", 22)
 
     grid_x, grid_y, total_w, total_h = 110, 320, 1600, 1000
     col_w, row_h = total_w // 7, total_h // 6
@@ -203,8 +193,11 @@ def generer_image_hd(mois, activites_du_mois):
         x, y = grid_x + (col * col_w), grid_y + (row * row_h)
         
         if 1 <= j_num <= p["jours"]:
-            d.rectangle([x+8, y+8, x+col_w-8, y+row_h-8], outline=(200, 200, 200, 255), width=2)
-            d.text((x+col_w-25, y+35), str(j_num), fill=(80,80,80,255), font=f_num, anchor="rm")
+            # Cases blanches avec bordures arrondies de rayon 15
+            d.rounded_rectangle([x+8, y+8, x+col_w-8, y+row_h-8], radius=15, fill=(255, 255, 255, 255), outline=(200, 200, 200, 255), width=2)
+            
+            # TEXTE DES DATES EN VERT (52, 168, 83)
+            d.text((x+col_w-25, y+35), str(j_num), fill=(52, 168, 83, 255), font=f_num, anchor="rm")
             
             if j_num in activites_du_mois:
                 y_off = y + 75
@@ -213,25 +206,15 @@ def generer_image_hd(mois, activites_du_mois):
                 max_w = col_w - 36
                 
                 for ev in evs:
-                    d.rounded_rectangle([x+15, y_off, x+col_w-15, y_off+ch], radius=6, fill=tuple(ev["couleur"]))
                     texte_propre = tronquer_texte(ev["texte"], f_ev, d, max_w)
-                    d.text((x + col_w//2, y_off + ch//2), texte_propre, fill=(255,255,255,255), font=f_ev, anchor="mm")
+                    # Textes d'évènements en noir, sans pastille
+                    d.text((x + col_w//2, y_off + ch//2), texte_propre, fill=(0,0,0,255), font=f_ev, anchor="mm")
                     y_off += ch + 4
-
-    espacement = min(220, total_w // len(ORGANISATEURS))
-    x_leg = grid_x + (total_w - (len(ORGANISATEURS) * espacement)) // 2
-    y_leg = grid_y + (6 * row_h) + 20
-    
-    for i, (nom, conf) in enumerate(ORGANISATEURS.items()):
-        x_p = x_leg + (i * espacement)
-        d.rectangle([x_p, y_leg, x_p+30, y_leg+30], fill=conf["rgb"])
-        d.text((x_p + 40, y_leg + 2), nom, fill=(50,50,50,255), font=f_leg)
 
     return Image.alpha_composite(base, txt_layer).convert("RGB")
 
 st.divider()
 
-# --- BOUTON EXPORT ---
 if st.button("🖼️ PRÉPARER L'IMAGE JPEG HD", use_container_width=True):
     with st.spinner("Dessin de l'image en cours..."):
         img_finale = generer_image_hd(mois_sel, st.session_state.activites[mois_sel])
