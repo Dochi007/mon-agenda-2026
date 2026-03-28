@@ -6,14 +6,14 @@ import calendar as cal_sys
 
 st.set_page_config(page_title="Programmation EEF", layout="wide")
 
-# Nouveaux organisateurs ajoutés (Kabod et EP)
+# --- ORGANISATEURS (Transparence ajustée à 178 sur 255) ---
 ORGANISATEURS = {
-    "EEF":   {"rgb": (52, 168, 83, 255), "hex": "#34a853"},
-    "JFC":   {"rgb": (161, 66, 244, 255), "hex": "#a142f4"},
-    "JE":    {"rgb": (217, 48, 37, 255), "hex": "#d93025"},
-    "DC":    {"rgb": (249, 171, 0, 255), "hex": "#f9ab00"},
-    "Kabod": {"rgb": (66, 133, 244, 255), "hex": "#4285f4"},
-    "EP":    {"rgb": (255, 112, 67, 255), "hex": "#ff7043"}
+    "EEF":   {"rgb": (52, 168, 83, 178), "hex": "#34a853"},
+    "JFC":   {"rgb": (161, 66, 244, 178), "hex": "#a142f4"},
+    "JE":    {"rgb": (217, 48, 37, 178), "hex": "#d93025"},
+    "DC":    {"rgb": (249, 171, 0, 178), "hex": "#f9ab00"},
+    "Kabod": {"rgb": (66, 133, 244, 178), "hex": "#4285f4"},
+    "EP":    {"rgb": (255, 112, 67, 178), "hex": "#ff7043"}
 }
 
 MOIS_NUM = {"Janvier": "01", "Février": "02", "Mars": "03", "Avril": "04", "Mai": "05", "Juin": "06", 
@@ -62,7 +62,7 @@ def generer_tous_les_recurrents():
 
 # --- INITIALISATION MÉMOIRE ---
 if 'initialise' not in st.session_state:
-    st.session_state.activites = generer_tous_les_recurrents() # Charge l'année 2026 complète
+    st.session_state.activites = generer_tous_les_recurrents()
     st.session_state.initialise = True
     st.session_state.last_action = None
 
@@ -90,12 +90,12 @@ def dialog_supprimer(jour, mois, index_event, texte):
         st.rerun()
 
 # --- INTERFACE PRINCIPALE ---
-st.title("PROGRAMME EEF")
+st.title("Programme EEF")
 mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
 m_num = MOIS_NUM[mois_sel]
 
-st.info("💡 La programmation récurrente est générée automatiquement. Cliquez sur un évènement pour le supprimer si exceptionnellement il n'a pas lieu.")
+st.info("💡 La programmation récurrente est générée automatiquement. Cliquez sur un évènement pour le modifier ou le supprimer.")
 
 # --- CONSTRUCTION DU CALENDRIER ---
 calendar_events = []
@@ -149,7 +149,26 @@ if cal_result and "callback" in cal_result:
                         dialog_supprimer(jour_clique, mois_sel, idx, event_title)
                         break
 
-# --- MOTEUR DE DESSIN PIL ---
+# --- FONCTIONS DE DESSIN PIL ---
+
+# Fonction pour sécuriser la largeur du texte
+def largeur_texte(texte, font, draw):
+    try:
+        return draw.textlength(texte, font=font)
+    except AttributeError:
+        try:
+            return draw.textbbox((0,0), texte, font=font)[2]
+        except Exception:
+            return len(texte) * 8 # Approche de secours
+
+def tronquer_texte(texte, font, draw, max_largeur):
+    if largeur_texte(texte, font, draw) <= max_largeur:
+        return texte
+    # On coupe lettre par lettre jusqu'à ce que ça rentre avec "..."
+    while len(texte) > 0 and largeur_texte(texte + "...", font, draw) > max_largeur:
+        texte = texte[:-1]
+    return texte + "..."
+
 def generer_image_hd(mois, activites_du_mois):
     p = CONFIG_2026[mois]
     base = Image.open("test.png").convert("RGBA").resize((1800, 1400))
@@ -182,12 +201,22 @@ def generer_image_hd(mois, activites_du_mois):
                 y_off = y + 75
                 evs = activites_du_mois[j_num]
                 ch = min(35, (row_h - 90) // max(1, len(evs)) - 4)
+                
+                # Espace maximum autorisé pour le texte (largeur de colonne moins les marges)
+                max_w = col_w - 36
+                
                 for ev in evs:
+                    # 1. On dessine le fond (maintenant semi-transparent à 70%)
                     d.rounded_rectangle([x+15, y_off, x+col_w-15, y_off+ch], radius=6, fill=tuple(ev["couleur"]))
-                    d.text((x + col_w//2, y_off + ch//2), ev["texte"], fill="white", font=f_ev, anchor="mm")
+                    
+                    # 2. On coupe le texte s'il est trop long
+                    texte_propre = tronquer_texte(ev["texte"], f_ev, d, max_w)
+                    
+                    # 3. On dessine le texte par dessus (le texte reste toujours opaque)
+                    d.text((x + col_w//2, y_off + ch//2), texte_propre, fill=(255,255,255,255), font=f_ev, anchor="mm")
                     y_off += ch + 4
 
-    # Légende dynamique selon le nombre d'organisateurs
+    # Légende
     espacement = min(220, total_w // len(ORGANISATEURS))
     x_leg = grid_x + (total_w - (len(ORGANISATEURS) * espacement)) // 2
     y_leg = grid_y + (6 * row_h) + 20
