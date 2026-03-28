@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 from streamlit_calendar import calendar
 from PIL import Image, ImageDraw, ImageFont
 import io
@@ -99,7 +99,7 @@ def dialog_supprimer(jour, mois, index_event, texte):
         if 'image_export' in st.session_state: del st.session_state['image_export']
         st.rerun()
 
-st.title("Programmation EEF")
+st.title("Programme EEF")
 mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
 m_num = MOIS_NUM[mois_sel]
