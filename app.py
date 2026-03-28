@@ -54,7 +54,7 @@ def dialog_supprimer(jour, index_event, texte):
         st.rerun()
 
 # --- INTERFACE PRINCIPALE ---
-st.title("Programmation EEF")
+st.title("PROGRAMME EEF")
 mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
 m_num = MOIS_NUM[mois_sel]
