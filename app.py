@@ -5,7 +5,6 @@ import io
 
 st.set_page_config(page_title="Programmation EEF", layout="wide")
 
-# --- DONNÉES ---
 ORGANISATEURS = {
     "EEF": {"rgb": (52, 168, 83, 255), "hex": "#34a853"},
     "JFC": {"rgb": (161, 66, 244, 255), "hex": "#a142f4"},
@@ -25,27 +24,42 @@ CONFIG_2026 = {
     "Novembre": {"decalage": 0, "jours": 30}, "Décembre": {"decalage": 2, "jours": 31}
 }
 
+# --- INITIALISATION MÉMOIRE ---
 if 'activites' not in st.session_state:
     st.session_state.activites = {}
+if 'last_action' not in st.session_state:
+    st.session_state.last_action = None
 
+# --- FENÊTRES MODALES (POP-UPS) ---
+@st.dialog("➕ Nouvel évènement")
+def dialog_ajout(jour, mois):
+    st.write(f"**Date :** {jour} {mois} 2026")
+    o_input = st.selectbox("Organisateur", list(ORGANISATEURS.keys()))
+    t_input = st.text_input("Titre")
+    
+    if st.button("Enregistrer", type="primary", use_container_width=True):
+        if jour not in st.session_state.activites: st.session_state.activites[jour] = []
+        st.session_state.activites[jour].append({"texte": f"{o_input} - {t_input}", "couleur": ORGANISATEURS[o_input]["rgb"]})
+        if 'image_export' in st.session_state: del st.session_state['image_export']
+        st.rerun()
+
+@st.dialog("✏️ Modifier / Supprimer")
+def dialog_supprimer(jour, index_event, texte):
+    st.write(f"Évènement : **{texte}**")
+    if st.button("🗑️ Supprimer cet évènement", type="primary", use_container_width=True):
+        del st.session_state.activites[jour][index_event]
+        if len(st.session_state.activites[jour]) == 0:
+            del st.session_state.activites[jour]
+        if 'image_export' in st.session_state: del st.session_state['image_export']
+        st.rerun()
+
+# --- INTERFACE PRINCIPALE ---
 st.title("Programmation EEF")
 mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
 m_num = MOIS_NUM[mois_sel]
 
-# --- AJOUT RAPIDE ---
-with st.expander("➕ Ajouter un évènement", expanded=True):
-    c1, c2, c3 = st.columns([1, 2, 3])
-    d_input = c1.number_input("Jour", 1, params["jours"])
-    o_input = c2.selectbox("Organisateur", list(ORGANISATEURS.keys()))
-    t_input = c3.text_input("Titre")
-    if st.button("Enregistrer", use_container_width=True):
-        if d_input not in st.session_state.activites: st.session_state.activites[d_input] = []
-        st.session_state.activites[d_input].append({"texte": f"{o_input} - {t_input}", "couleur": ORGANISATEURS[o_input]["rgb"]})
-        if 'image_export' in st.session_state: del st.session_state['image_export']
-        st.rerun()
-
-# --- CALENDRIER INTERACTIF (Type Google) ---
+# --- CONSTRUCTION DU CALENDRIER ---
 calendar_events = []
 for jour, evs in st.session_state.activites.items():
     jour_str = f"{jour:02d}"
@@ -53,11 +67,11 @@ for jour, evs in st.session_state.activites.items():
         hex_col = "#1a73e8"
         for k, v in ORGANISATEURS.items():
             if v["rgb"] == ev["couleur"]: hex_col = v["hex"]
-            
         calendar_events.append({
             "title": ev["texte"],
             "start": f"2026-{m_num}-{jour_str}",
-            "color": hex_col
+            "color": hex_col,
+            "allDay": True
         })
 
 calendar_options = {
@@ -65,10 +79,36 @@ calendar_options = {
     "initialDate": f"2026-{m_num}-01",
     "locale": "fr",
     "headerToolbar": {"left": "", "center": "title", "right": ""},
-    "height": 600
+    "height": 600,
+    "selectable": True
 }
 
-calendar(events=calendar_events, options=calendar_options)
+# Affichage du calendrier (Capture des clics)
+cal_result = calendar(events=calendar_events, options=calendar_options)
+
+# --- DÉTECTION DES CLICS ---
+if cal_result and "action" in cal_result:
+    # On crée une "signature" du clic pour ne pas rouvrir la fenêtre en boucle
+    action_sig = f"{cal_result['action']}_{cal_result.get('jsEvent', {}).get('timeStamp', '')}"
+    
+    if st.session_state.last_action != action_sig:
+        st.session_state.last_action = action_sig
+        
+        # SI ON CLIQUE SUR UNE CASE VIDE
+        if cal_result["action"] == "dateClick":
+            jour_clique = int(cal_result["date"]["dateStr"].split("-")[2])
+            dialog_ajout(jour_clique, mois_sel)
+            
+        # SI ON CLIQUE SUR UN ÉVÈNEMENT EXISTANT
+        elif cal_result["action"] == "eventClick":
+            jour_clique = int(cal_result["event"]["start"].split("T")[0].split("-")[2])
+            titre_clique = cal_result["event"]["title"]
+            
+            # Recherche de l'index de l'évènement pour pouvoir le supprimer
+            for idx, ev in enumerate(st.session_state.activites.get(jour_clique, [])):
+                if ev["texte"] == titre_clique:
+                    dialog_supprimer(jour_clique, idx, titre_clique)
+                    break
 
 # --- MOTEUR DE DESSIN PIL ---
 def generer_image_hd(mois, activites):
