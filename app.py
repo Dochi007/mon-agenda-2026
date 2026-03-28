@@ -43,7 +43,6 @@ with st.expander("➕ Ajouter un évènement"):
     if st.button("Enregistrer", use_container_width=True):
         if d_input not in st.session_state.activites: st.session_state.activites[d_input] = []
         st.session_state.activites[d_input].append({"texte": f"{o_input} - {t_input}", "couleur": ORGANISATEURS[o_input]})
-        # Effacer l'image en cache si on ajoute un nouvel événement
         if 'image_export' in st.session_state:
             del st.session_state['image_export']
         st.rerun()
@@ -69,8 +68,9 @@ def generer_image_hd(mois, activites):
         f_titre = ImageFont.truetype("Heavitas.ttf", 75)
         f_num = ImageFont.load_default(size=30)
         f_ev = ImageFont.load_default(size=18)
+        f_leg = ImageFont.load_default(size=22)
     except:
-        f_titre = f_num = f_ev = ImageFont.load_default()
+        f_titre = f_num = f_ev = f_leg = ImageFont.load_default()
 
     grid_x, grid_y, total_w, total_h = 110, 320, 1600, 1000
     col_w, row_h = total_w // 7, total_h // 6
@@ -94,6 +94,15 @@ def generer_image_hd(mois, activites):
                     d.rounded_rectangle([x+15, y_off, x+col_w-15, y_off+ch], radius=6, fill=tuple(ev["couleur"]))
                     d.text((x + col_w//2, y_off + ch//2), ev["texte"], fill="white", font=f_ev, anchor="mm")
                     y_off += ch + 4
+
+    # --- PIED DE PAGE (LÉGENDE) ---
+    x_leg = grid_x + (total_w - (len(ORGANISATEURS) * 220)) // 2 + 60
+    y_leg = grid_y + (6 * row_h) + 20 # 20px de marge au lieu de 50px pour être plus près
+    
+    for i, (nom, coul) in enumerate(ORGANISATEURS.items()):
+        x_p = x_leg + (i * 220)
+        d.rectangle([x_p, y_leg, x_p+30, y_leg+30], fill=coul)
+        d.text((x_p + 40, y_leg + 2), nom, fill=(50,50,50,255), font=f_leg)
 
     return Image.alpha_composite(base, txt_layer).convert("RGB")
 
