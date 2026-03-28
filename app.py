@@ -3,7 +3,7 @@ from streamlit_calendar import calendar
 from PIL import Image, ImageDraw, ImageFont
 import io
 
-st.set_page_config(page_title="Programmation EEF", layout="wide")
+st.set_page_config(page_title="EEF PLANNING", layout="wide")
 
 ORGANISATEURS = {
     "EEF": {"rgb": (52, 168, 83, 255), "hex": "#34a853"},
@@ -43,10 +43,10 @@ def dialog_ajout(jour, mois):
         if 'image_export' in st.session_state: del st.session_state['image_export']
         st.rerun()
 
-@st.dialog("✏️ Modifier / Supprimer")
+@st.dialog("✏️ Supprimer l'évènement")
 def dialog_supprimer(jour, index_event, texte):
-    st.write(f"Évènement : **{texte}**")
-    if st.button("🗑️ Supprimer cet évènement", type="primary", use_container_width=True):
+    st.write(f"Voulez-vous supprimer l'évènement : **{texte}** ?")
+    if st.button("🗑️ Oui, Supprimer", type="primary", use_container_width=True):
         del st.session_state.activites[jour][index_event]
         if len(st.session_state.activites[jour]) == 0:
             del st.session_state.activites[jour]
@@ -58,6 +58,8 @@ st.title("Programmation EEF")
 mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
 m_num = MOIS_NUM[mois_sel]
+
+st.info("💡 Cliquez directement sur une case du calendrier pour ajouter un évènement, ou sur un évènement existant pour le supprimer.")
 
 # --- CONSTRUCTION DU CALENDRIER ---
 calendar_events = []
@@ -78,36 +80,41 @@ calendar_options = {
     "initialView": "dayGridMonth",
     "initialDate": f"2026-{m_num}-01",
     "locale": "fr",
-    "headerToolbar": {"left": "", "center": "title", "right": ""},
+    "headerToolbar": {"left": "title", "center": "", "right": ""},
     "height": 600,
     "selectable": True
 }
 
-# Affichage du calendrier (Capture des clics)
-cal_result = calendar(events=calendar_events, options=calendar_options)
+# Affichage du calendrier avec détection explicite des clics
+cal_result = calendar(events=calendar_events, options=calendar_options, callbacks=['dateClick', 'eventClick'])
 
-# --- DÉTECTION DES CLICS ---
-if cal_result and "action" in cal_result:
-    # On crée une "signature" du clic pour ne pas rouvrir la fenêtre en boucle
-    action_sig = f"{cal_result['action']}_{cal_result.get('jsEvent', {}).get('timeStamp', '')}"
+# --- DÉTECTION DES CLICS CORRIGÉE ---
+if cal_result and "callback" in cal_result:
+    callback_type = cal_result["callback"]
     
-    if st.session_state.last_action != action_sig:
-        st.session_state.last_action = action_sig
+    # 1. Clic sur une case vide
+    if callback_type == "dateClick":
+        # On utilise le timeStamp unique pour ne pas rouvrir la fenêtre au hasard
+        click_id = str(cal_result["dateClick"].get("jsEvent", {}).get("timeStamp", cal_result["dateClick"]["dateStr"]))
         
-        # SI ON CLIQUE SUR UNE CASE VIDE
-        if cal_result["action"] == "dateClick":
-            jour_clique = int(cal_result["date"]["dateStr"].split("-")[2])
+        if st.session_state.last_action != click_id:
+            st.session_state.last_action = click_id
+            jour_clique = int(cal_result["dateClick"]["dateStr"].split("-")[2])
             dialog_ajout(jour_clique, mois_sel)
             
-        # SI ON CLIQUE SUR UN ÉVÈNEMENT EXISTANT
-        elif cal_result["action"] == "eventClick":
-            jour_clique = int(cal_result["event"]["start"].split("T")[0].split("-")[2])
-            titre_clique = cal_result["event"]["title"]
+    # 2. Clic sur un évènement existant
+    elif callback_type == "eventClick":
+        event_title = cal_result["eventClick"]["event"]["title"]
+        click_id = str(cal_result["eventClick"].get("jsEvent", {}).get("timeStamp", event_title))
+        
+        if st.session_state.last_action != click_id:
+            st.session_state.last_action = click_id
+            event_start = cal_result["eventClick"]["event"]["start"]
+            jour_clique = int(event_start.split("T")[0].split("-")[2])
             
-            # Recherche de l'index de l'évènement pour pouvoir le supprimer
             for idx, ev in enumerate(st.session_state.activites.get(jour_clique, [])):
-                if ev["texte"] == titre_clique:
-                    dialog_supprimer(jour_clique, idx, titre_clique)
+                if ev["texte"] == event_title:
+                    dialog_supprimer(jour_clique, idx, event_title)
                     break
 
 # --- MOTEUR DE DESSIN PIL ---
