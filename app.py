@@ -99,7 +99,7 @@ def dialog_supprimer(jour, mois, index_event, texte):
         if 'image_export' in st.session_state: del st.session_state['image_export']
         st.rerun()
 
-st.title("Programme EEF")
+st.title("Programmation EEF")
 mois_sel = st.selectbox("Mois", list(CONFIG_2026.keys()), index=3)
 params = CONFIG_2026[mois_sel]
 m_num = MOIS_NUM[mois_sel]
@@ -193,21 +193,21 @@ def generer_image_hd(mois, activites_du_mois):
         x, y = grid_x + (col * col_w), grid_y + (row * row_h)
         
         if 1 <= j_num <= p["jours"]:
-            # Cases blanches avec bordures arrondies de rayon 15
-            d.rounded_rectangle([x+8, y+8, x+col_w-8, y+row_h-8], radius=15, fill=(255, 255, 255, 255), outline=(200, 200, 200, 255), width=2)
+            # Cases avec marges réduites (+4 et -4 au lieu de +8 et -8)
+            d.rounded_rectangle([x+4, y+4, x+col_w-4, y+row_h-4], radius=10, fill=(255, 255, 255, 255), outline=(200, 200, 200, 255), width=2)
             
-            # TEXTE DES DATES EN VERT (52, 168, 83)
-            d.text((x+col_w-25, y+35), str(j_num), fill=(52, 168, 83, 255), font=f_num, anchor="rm")
+            # Numéro du jour repoussé dans le coin en haut à droite (x+col_w-15, y+20)
+            d.text((x+col_w-15, y+20), str(j_num), fill=(52, 168, 83, 255), font=f_num, anchor="rm")
             
             if j_num in activites_du_mois:
-                y_off = y + 75
+                # Le texte commence beaucoup plus haut (y+45 au lieu de y+75)
+                y_off = y + 45
                 evs = activites_du_mois[j_num]
-                ch = min(35, (row_h - 90) // max(1, len(evs)) - 4)
-                max_w = col_w - 36
+                ch = min(35, (row_h - 55) // max(1, len(evs)) - 4)
+                max_w = col_w - 20
                 
                 for ev in evs:
                     texte_propre = tronquer_texte(ev["texte"], f_ev, d, max_w)
-                    # Textes d'évènements en noir, sans pastille
                     d.text((x + col_w//2, y_off + ch//2), texte_propre, fill=(0,0,0,255), font=f_ev, anchor="mm")
                     y_off += ch + 4
 
